@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"sort"
 )
@@ -17,7 +18,11 @@ const property = 0x00b1b104
 const ep1File = "SimCityDataEP1.package"
 const sponsoredFile = "SimCity_DLC0.package"
 
-var balloonID = resourceID{0x67771f5c, 0, 0x202d03a8}
+var ep1LoaderID = resourceID{0x67771f5c, 0xa31e060f, 0x05afd67d}
+var ep1ScriptLoad = regexp.MustCompile(`(?m)^simcity\.DynamicScriptLoader\.LoadScriptFromSrc\('[^'\r\n]+'\);[ \t]*\r?\n`)
+
+const ep1BindingsMod = "000_Codex_EP1_Unbind.package"
+
 var sponsoredIDs = []resourceID{
 	{property, 0x53f0c900, 0xfb212a3c},                                     // Nissan
 	{property, 0x56f0c900, 0x2ad521ba}, {property, 0x56f0c900, 0xd1c6c819}, // Crest
@@ -27,42 +32,20 @@ var sponsoredIDs = []resourceID{
 	{property, 0x56f0c900, 0x59f58f96}, {property, 0x56f0c900, 0x83b7f016},
 }
 
-func withoutBalloons(source []byte) ([]byte, error) {
-	const declaration = "simcity.SpeechBalloonPolling.DLC_EP1 = {"
-	prefix, rest, found := bytes.Cut(source, []byte(declaration))
-	if !found || !bytes.Contains(prefix, []byte("kLocalSpeechBalloonEP1LocaleTable")) {
-		return nil, fmt.Errorf("unrecognized Cities of Tomorrow balloon script")
-	}
-	polling, events, found := bytes.Cut(rest, []byte("// Event-Driven Speech Balloons"))
-	if !found || !bytes.Contains(polling, []byte("DataBindings: {")) {
-		return nil, fmt.Errorf("unrecognized Cities of Tomorrow balloon bindings")
-	}
-	const eventPrefix = "simcity.SpeechBalloonEvents.DataBindings["
-	if !bytes.Contains(events, []byte(eventPrefix)) {
-		return nil, fmt.Errorf("missing Cities of Tomorrow balloon events")
-	}
-	for _, line := range bytes.Split(events, []byte("\n")) {
-		if bytes.HasPrefix(line, []byte("simcity.")) && !bytes.HasPrefix(line, []byte(eventPrefix)) {
-			return nil, fmt.Errorf("unexpected declaration in Cities of Tomorrow balloon script")
-		}
-	}
-	return append(bytes.Clone(prefix), declaration+
-		"\r\n    unlockBin: simcity.DLC_EP1.kResourceIDDLC_EP1,"+
-		"\r\n    DataBindings: {}\r\n};\r\n"...), nil
-}
-
 func build(dataDir string) (map[string][]byte, error) {
 	ep1, err := readPackage(filepath.Join(dataDir, ep1File), func(id resourceID) bool {
-		return id == balloonID || (id.kind == property && id.group&0xffff == 0xc900)
+		return id == ep1LoaderID || (id.kind == property && id.group&0xffff == 0xc900)
 	})
 	if err != nil {
 		return nil, fmt.Errorf("%s: %w", ep1File, err)
 	}
-	balloon, err := withoutBalloons(ep1[balloonID])
-	if err != nil {
-		return nil, err
+	loader := ep1[ep1LoaderID]
+	if len(ep1ScriptLoad.FindAllIndex(loader, -1)) != 12 ||
+		!bytes.Contains(loader, []byte("simcity.DLC_EP1.kResourceIDDLC_EP1")) {
+		return nil, fmt.Errorf("unsupported Cities of Tomorrow UI loader")
 	}
-	delete(ep1, balloonID)
+	unbound := ep1ScriptLoad.ReplaceAll(loader, nil)
+	delete(ep1, ep1LoaderID)
 
 	menu := make(resources)
 	for id, original := range ep1 {
@@ -106,10 +89,10 @@ func build(dataDir string) (map[string][]byte, error) {
 	}
 
 	return map[string][]byte{
-		"000_Codex_Skip_Intro.package":      intro,
-		"000_Codex_EP1_Menu_Test.package":   writePackage(menu),
-		"000_Codex_EP1_No_Balloons.package": writePackage(resources{balloonID: balloon}),
-		sponsoredMod:                        writePackage(sponsored),
+		startupMod:                        intro,
+		"000_Codex_EP1_Menu_Test.package": writePackage(menu),
+		ep1BindingsMod:                    writePackage(resources{ep1LoaderID: unbound}),
+		sponsoredMod:                      writePackage(sponsored),
 	}, nil
 }
 
@@ -134,6 +117,9 @@ type change struct {
 	remove       bool
 }
 
+const startupMod = "000_Codex_Skip_Intro.package"
+const legacyStartupHash = "af033cb4eae9ec6c43a59c3439499544c5de1e0dcd5743e8546231d3d5b1dbd3"
+const legacyLogoHash = "37cc97ee766ade2d1690a855045977893275e5e60f2fbf0995ea8f1746abf5f3"
 const sponsoredMod = "000_Codex_Sponsored_Buildings.package"
 const legacySponsoredHash = "b8371e6c0cd36568328975bebbbb78090998ba03ac0dd7b5b63f62ef76307cda"
 
@@ -147,14 +133,16 @@ func apply(dataDir string, packages map[string][]byte, remove bool) error {
 		content, err := os.ReadFile(path)
 		switch {
 		case err == nil:
-			legacySponsor := name == sponsoredMod && fmt.Sprintf("%x", sha256.Sum256(content)) == legacySponsoredHash
-			if !legacySponsor && !bytes.Equal(content, packages[name]) {
+			hash := fmt.Sprintf("%x", sha256.Sum256(content))
+			legacy := (name == sponsoredMod && hash == legacySponsoredHash) ||
+				(name == startupMod && (hash == legacyStartupHash || hash == legacyLogoHash))
+			if !legacy && !bytes.Equal(content, packages[name]) {
 				return fmt.Errorf("existing file differs from this mod: %s", path)
 			}
-			if remove || legacySponsor {
+			if remove || legacy {
 				changes = append(changes, change{path: path, original: content, remove: true})
 			}
-			if legacySponsor && !remove {
+			if legacy && !remove {
 				changes = append(changes, change{path: path})
 			}
 		case errors.Is(err, os.ErrNotExist):
@@ -165,14 +153,19 @@ func apply(dataDir string, packages map[string][]byte, remove bool) error {
 			return err
 		}
 	}
-	legacy := filepath.Join(dataDir, "Locale", "ru-ru", "000_Codex_EP1_Russian_Thoughts.package")
-	const legacyHash = "0abd2b4f2d9b1108253776a03c89e1f7e036101bf1e62bb71098adfde61d7d69"
-	old, err := os.ReadFile(legacy)
-	if err != nil && !errors.Is(err, os.ErrNotExist) {
-		return err
-	}
-	if err == nil && fmt.Sprintf("%x", sha256.Sum256(old)) == legacyHash {
-		changes = append(changes, change{path: legacy, original: old, remove: true})
+	for _, legacy := range []struct{ name, hash string }{
+		{"000_Codex_EP1_No_Balloons.package", "3e09454954aa2a06a95d5a490c0f330df9e45951c5a9d6cab6f8897021fe1762"},
+		{"000_Codex_EP1_Unbind_Test.package", "524ee1773176bf0a12fda51c53011fe2846ecd9dc0496aa8661e565705acf3dc"},
+		{filepath.Join("Locale", "ru-ru", "000_Codex_EP1_Russian_Thoughts.package"), "0abd2b4f2d9b1108253776a03c89e1f7e036101bf1e62bb71098adfde61d7d69"},
+	} {
+		path := filepath.Join(dataDir, legacy.name)
+		old, err := os.ReadFile(path)
+		if err != nil && !errors.Is(err, os.ErrNotExist) {
+			return err
+		}
+		if err == nil && fmt.Sprintf("%x", sha256.Sum256(old)) == legacy.hash {
+			changes = append(changes, change{path: path, original: old, remove: true})
+		}
 	}
 	if len(changes) == 0 {
 		fmt.Println("No changes needed.")
