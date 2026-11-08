@@ -18,16 +18,13 @@ const ep1File = "SimCityDataEP1.package"
 const sponsoredFile = "SimCity_DLC0.package"
 
 var balloonID = resourceID{0x67771f5c, 0, 0x202d03a8}
-var sponsoredIDs = map[string][]resourceID{
-	sponsoredFile: {
-		{property, 0x53f0c900, 0xfb212a3c},                                     // Nissan
-		{property, 0x56f0c900, 0x2ad521ba}, {property, 0x56f0c900, 0xd1c6c819}, // Crest
-		{property, 0x56f0c900, 0xdae498c6}, {property, 0x56f0c900, 0xed2cd768},
-		{property, 0x56f0c900, 0x51b708a9}, {property, 0x56f0c900, 0x3cfdeaba},
-		{property, 0x56f0c900, 0x103bb38a}, {property, 0x56f0c900, 0x83559008},
-		{property, 0x56f0c900, 0x59f58f96}, {property, 0x56f0c900, 0x83b7f016},
-	},
-	ep1File: {{property, 0x65f0c900, 0x2e446857}}, // Progressive
+var sponsoredIDs = []resourceID{
+	{property, 0x53f0c900, 0xfb212a3c},                                     // Nissan
+	{property, 0x56f0c900, 0x2ad521ba}, {property, 0x56f0c900, 0xd1c6c819}, // Crest
+	{property, 0x56f0c900, 0xdae498c6}, {property, 0x56f0c900, 0xed2cd768},
+	{property, 0x56f0c900, 0x51b708a9}, {property, 0x56f0c900, 0x3cfdeaba},
+	{property, 0x56f0c900, 0x103bb38a}, {property, 0x56f0c900, 0x83559008},
+	{property, 0x56f0c900, 0x59f58f96}, {property, 0x56f0c900, 0x83b7f016},
 }
 
 func withoutBalloons(source []byte) ([]byte, error) {
@@ -82,7 +79,7 @@ func build(dataDir string) (map[string][]byte, error) {
 	}
 
 	sponsored, err := readPackage(filepath.Join(dataDir, sponsoredFile), func(id resourceID) bool {
-		for _, candidate := range sponsoredIDs[sponsoredFile] {
+		for _, candidate := range sponsoredIDs {
 			if id == candidate {
 				return true
 			}
@@ -92,7 +89,7 @@ func build(dataDir string) (map[string][]byte, error) {
 	if err != nil {
 		return nil, fmt.Errorf("%s: %w", sponsoredFile, err)
 	}
-	if len(sponsored) != len(sponsoredIDs[sponsoredFile]) {
+	if len(sponsored) != len(sponsoredIDs) {
 		return nil, fmt.Errorf("some sponsored building entries are missing")
 	}
 	for id, original := range sponsored {
@@ -102,17 +99,17 @@ func build(dataDir string) (map[string][]byte, error) {
 		}
 		sponsored[id] = updated
 	}
-	for _, id := range sponsoredIDs[ep1File] {
-		if menu[id] == nil {
-			return nil, fmt.Errorf("missing Progressive building entry")
-		}
-		sponsored[id] = menu[id]
+
+	intro, err := skipIntroPackage(dataDir)
+	if err != nil {
+		return nil, err
 	}
 
 	return map[string][]byte{
-		"000_Codex_EP1_Menu_Test.package":       writePackage(menu),
-		"000_Codex_EP1_No_Balloons.package":     writePackage(resources{balloonID: balloon}),
-		"000_Codex_Sponsored_Buildings.package": writePackage(sponsored),
+		"000_Codex_Skip_Intro.package":      intro,
+		"000_Codex_EP1_Menu_Test.package":   writePackage(menu),
+		"000_Codex_EP1_No_Balloons.package": writePackage(resources{balloonID: balloon}),
+		sponsoredMod:                        writePackage(sponsored),
 	}, nil
 }
 
@@ -137,6 +134,9 @@ type change struct {
 	remove       bool
 }
 
+const sponsoredMod = "000_Codex_Sponsored_Buildings.package"
+const legacySponsoredHash = "b8371e6c0cd36568328975bebbbb78090998ba03ac0dd7b5b63f62ef76307cda"
+
 func apply(dataDir string, packages map[string][]byte, remove bool) error {
 	if err := requireClosed(); err != nil {
 		return err
@@ -147,11 +147,15 @@ func apply(dataDir string, packages map[string][]byte, remove bool) error {
 		content, err := os.ReadFile(path)
 		switch {
 		case err == nil:
-			if !bytes.Equal(content, packages[name]) {
+			legacySponsor := name == sponsoredMod && fmt.Sprintf("%x", sha256.Sum256(content)) == legacySponsoredHash
+			if !legacySponsor && !bytes.Equal(content, packages[name]) {
 				return fmt.Errorf("existing file differs from this mod: %s", path)
 			}
-			if remove {
+			if remove || legacySponsor {
 				changes = append(changes, change{path: path, original: content, remove: true})
+			}
+			if legacySponsor && !remove {
+				changes = append(changes, change{path: path})
 			}
 		case errors.Is(err, os.ErrNotExist):
 			if !remove {

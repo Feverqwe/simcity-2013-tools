@@ -1,6 +1,6 @@
 # SimCity Cleanup
 
-SimCity Cleanup installs three mods for SimCity (2013). They hide Cities of Tomorrow buildings and sponsored buildings from Nissan, Crest, and Progressive in the build menu, and disable Cities of Tomorrow speech and thought bubbles. The tool builds the mods from your installed game files. It supports the EA app version with Cities of Tomorrow installed.
+SimCity Cleanup installs four mods for SimCity (2013). They hide Cities of Tomorrow buildings and sponsored buildings from Nissan, Crest, and Progressive in the build menu, disable Cities of Tomorrow speech and thought bubbles, and skip the startup movie. The tool builds the mods from your installed game files. It supports the EA app version with Cities of Tomorrow installed.
 
 Download `simcity-cleanup-windows-amd64.exe` from [Releases](https://github.com/Feverqwe/simcity-cleanup/releases). The executable runs on 64-bit Windows and requires no additional runtime.
 
@@ -28,5 +28,9 @@ Close SimCity and run:
 ```
 
 Use `1` for the default scale or `3` for a larger interface. This command uses the current Windows user's preferences and saves a backup beside `Preferences.prop` before changing it. If the preferences file is missing, start SimCity once and close it.
+
+## Black screen at launch
+
+On the tested EA app installation, launching SimCity with `-noUpdates` produced a black screen. Remove that argument from the EA app's advanced launch options if you added it. The startup movie patch works with the normal EA app launch.
 
 To build locally, run `go build .` from the repository root. Pushing a version tag such as `v1.0.0` triggers the Windows build and publishes the executable in a GitHub Release.
