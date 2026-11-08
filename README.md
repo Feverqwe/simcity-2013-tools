@@ -1,13 +1,22 @@
 # SimCity Cleanup
 
-This script installs three mods for SimCity (2013). They hide Cities of Tomorrow buildings and sponsored buildings from Nissan, Crest, and Progressive in the build menu, and disable Cities of Tomorrow speech and thought bubbles. The script builds the mods from your installed game files. It was tested with the EA app version of SimCity with Cities of Tomorrow installed.
+SimCity Cleanup installs three mods for SimCity (2013). They hide Cities of Tomorrow buildings and sponsored buildings from Nissan, Crest, and Progressive in the build menu, and disable Cities of Tomorrow speech and thought bubbles. The tool builds the mods from your installed game files. It supports the EA app version with Cities of Tomorrow installed.
 
-Requires Python 3.9 or later. Close SimCity, open PowerShell in this folder, and run the following command with your installation path.
+Download `simcity-cleanup-windows-amd64.exe` from [Releases](https://github.com/Feverqwe/simcity-cleanup/releases). The executable runs on 64-bit Windows and requires no additional runtime.
+
+Close SimCity, open PowerShell in the folder containing the download, and run the command with your game's installation path.
 
 ```powershell
-py -3 .\simcity_cleanup.py 'D:\EA\SimCity'
+.\simcity-cleanup-windows-amd64.exe 'D:\EA\SimCity'
 ```
 
-Add `--check` to build and verify the packages without installing them. Add `--remove` to uninstall the mods. The installer also removes the earlier Russian text override if it matches the original experimental file.
+Use `-check` before the path to preview the generated package checksums. Use `-remove` before the path to uninstall the mods.
+
+```powershell
+.\simcity-cleanup-windows-amd64.exe -check 'D:\EA\SimCity'
+.\simcity-cleanup-windows-amd64.exe -remove 'D:\EA\SimCity'
+```
 
 Buildings already placed can remain on the map. Use a new city to check the build menu and resident bubbles.
+
+To build locally, run `go build .` from the repository root. Pushing a version tag such as `v1.0.0` triggers the Windows build and publishes the executable in a GitHub Release.
