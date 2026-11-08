@@ -266,12 +266,27 @@ func run(args []string) error {
 	flags := flag.NewFlagSet("simcity-cleanup", flag.ContinueOnError)
 	check := flags.Bool("check", false, "build in memory and print checksums")
 	remove := flags.Bool("remove", false, "remove matching generated mods")
+	var scale byte
+	flags.Func("ui-scale", "set the Windows UI scale (1, 2, or 3)", func(value string) error {
+		if value != "1" && value != "2" && value != "3" {
+			return fmt.Errorf("choose 1, 2, or 3")
+		}
+		scale = value[0]
+		return nil
+	})
 	flags.Usage = func() {
 		fmt.Fprintln(flags.Output(), "Usage: simcity-cleanup.exe [-check | -remove] <SimCity directory>")
+		fmt.Fprintln(flags.Output(), "       simcity-cleanup.exe -ui-scale <1|2|3>")
 		flags.PrintDefaults()
 	}
 	if err := flags.Parse(args); err != nil {
 		return err
+	}
+	if scale != 0 {
+		if flags.NArg() != 0 || *check || *remove {
+			return fmt.Errorf("-ui-scale is a separate command and takes no game path")
+		}
+		return setUIScale(scale)
 	}
 	if flags.NArg() != 1 || (*check && *remove) {
 		flags.Usage()

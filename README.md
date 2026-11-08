@@ -19,4 +19,14 @@ Use `-check` before the path to preview the generated package checksums. Use `-r
 
 Buildings already placed can remain on the map. Use a new city to check the build menu and resident bubbles.
 
+## UI scaling on 4K displays
+
+Close SimCity and run:
+
+```powershell
+.\simcity-cleanup-windows-amd64.exe -ui-scale 2
+```
+
+Use `1` for the default scale or `3` for a larger interface. This command uses the current Windows user's preferences and saves a backup beside `Preferences.prop` before changing it. If the preferences file is missing, start SimCity once and close it.
+
 To build locally, run `go build .` from the repository root. Pushing a version tag such as `v1.0.0` triggers the Windows build and publishes the executable in a GitHub Release.
