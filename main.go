@@ -260,7 +260,7 @@ func sortedNames(packages map[string][]byte) []string {
 }
 
 func run(args []string) error {
-	flags := flag.NewFlagSet("simcity-cleanup", flag.ContinueOnError)
+	flags := flag.NewFlagSet("simcity-2013-tools", flag.ContinueOnError)
 	check := flags.Bool("check", false, "build in memory and print checksums")
 	remove := flags.Bool("remove", false, "remove matching generated mods")
 	var scale byte
@@ -272,8 +272,8 @@ func run(args []string) error {
 		return nil
 	})
 	flags.Usage = func() {
-		fmt.Fprintln(flags.Output(), "Usage: simcity-cleanup.exe [-check | -remove] <SimCity directory>")
-		fmt.Fprintln(flags.Output(), "       simcity-cleanup.exe -ui-scale <1|2|3>")
+		fmt.Fprintln(flags.Output(), "Usage: simcity-2013-tools-windows-amd64.exe [-check | -remove] <SimCity directory>")
+		fmt.Fprintln(flags.Output(), "       simcity-2013-tools-windows-amd64.exe -ui-scale <1|2|3>")
 		flags.PrintDefaults()
 	}
 	if err := flags.Parse(args); err != nil {
@@ -305,7 +305,7 @@ func run(args []string) error {
 
 func main() {
 	if err := run(os.Args[1:]); err != nil && !errors.Is(err, flag.ErrHelp) {
-		fmt.Fprintln(os.Stderr, "SimCity cleanup:", err)
+		fmt.Fprintln(os.Stderr, "SimCity 2013 Tools:", err)
 		os.Exit(1)
 	}
 }

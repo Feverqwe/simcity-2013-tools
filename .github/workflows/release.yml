@@ -24,11 +24,11 @@ jobs:
           CGO_ENABLED: '0'
           GOOS: windows
           GOARCH: amd64
-        run: go build -trimpath -o simcity-cleanup-windows-amd64.exe .
+        run: go build -trimpath -o simcity-2013-tools-windows-amd64.exe .
       - name: Package UI texture builder source
         run: git archive --format=zip --output simcity-ui-hd-builder.zip HEAD ui-hd
       - name: Publish release
         env:
           GH_TOKEN: ${{ github.token }}
           RELEASE_TAG: ${{ github.ref_name }}
-        run: gh release create "$RELEASE_TAG" --verify-tag --generate-notes simcity-cleanup-windows-amd64.exe simcity-ui-hd-builder.zip
+        run: gh release create "$RELEASE_TAG" --verify-tag --generate-notes simcity-2013-tools-windows-amd64.exe simcity-ui-hd-builder.zip
