@@ -1,8 +1,12 @@
-# SimCity Cleanup
+# SimCity 2013 Tools
+
+This repository contains SimCity Cleanup for game tweaks and an optional HD texture builder for the interface.
+
+## SimCity Cleanup
 
 SimCity Cleanup installs four mods for SimCity (2013). They hide Cities of Tomorrow and sponsored buildings from the build menu, disable the expansion's UI scripts, and skip the startup movie. The main menu shows the base-game logo and loading screens use base-game tips. The expansion's simulation remains installed. The tool builds the mods from your installed game files. It supports the EA app version with Cities of Tomorrow installed.
 
-Download `simcity-cleanup-windows-amd64.exe` from [Releases](https://github.com/Feverqwe/simcity-cleanup/releases). The executable runs on 64-bit Windows and requires no additional runtime.
+Download `simcity-cleanup-windows-amd64.exe` from [Releases](https://github.com/Feverqwe/simcity-2013-tools/releases). The executable runs on 64-bit Windows and requires no additional runtime.
 
 Close SimCity, open PowerShell in the folder containing the download, and run the command with your game's installation path.
 
@@ -33,4 +37,8 @@ Use `1` for the default scale or `3` for a larger interface. This command uses t
 
 On the tested EA app installation, launching SimCity with `-noUpdates` produced a black screen. Remove that argument from the EA app's advanced launch options if you added it. The startup movie patch works with the normal EA app launch.
 
-To build locally, run `go build .` from the repository root. Pushing a version tag such as `v1.0.0` triggers the Windows build and publishes the executable in a GitHub Release.
+## HD interface textures
+
+The optional IllustrationJaNai builder generates 2× UI textures from your installed game files. Download the builder ZIP from the release and follow the [Windows setup and installation guide](ui-hd/README.md).
+
+To build the cleanup executable locally, run `go build .` from the repository root. Pushing a version tag publishes the Windows executable and texture builder source archive in a GitHub Release.

@@ -1,0 +1,5 @@
+.venv/
+__pycache__/
+.illustration-cache/
+IllustrationJaNai_V3detail.zip
+*.package
