@@ -12,6 +12,7 @@ Agent handoff for SimCity 2013 Tools. Start with the navigation table and read o
 | HD UI, AI weights, or texture seams | [ui-hd/build.py](ui-hd/build.py), [ui-hd/ui-manifest.json](ui-hd/ui-manifest.json), [HD interface](#hd-interface) |
 | World texture formats, grouping, or archive precedence | [ui-hd/world.py](ui-hd/world.py), [HD world](#hd-world) |
 | Interrupted install or uninstall | [ui-hd/install-world.py](ui-hd/install-world.py), [Verification](#verification) |
+| Prior experiments, test evidence, and unfinished work | [Engineering memory](docs/agent-memory.md) |
 | Releases and deliverables | [.github/workflows/release.yml](.github/workflows/release.yml), [Repository and releases](#repository-and-releases) |
 
 ## Repository and releases
@@ -47,4 +48,4 @@ Agent handoff for SimCity 2013 Tools. Start with the navigation table and read o
 - Go changes: run `go vet ./...` and check the relevant command or build. Python changes: check both CLI entry points and exercise the affected behavior. Run `git diff --check` before handing off.
 - World changes: build from copies of clean game archives. Check dimensions, resource IDs, mip preservation, and that similarly keyed variants remain different in their respective archives. Test in-game effects on the Windows runner separately from structural checks.
 - Installer changes: exercise staged installation and removal. Interrupt between two archive replacements, then test both retry and rollback from the resulting mixed state. Verify restored originals with SHA-256 and confirm unrelated sets stay installed. Reject unfamiliar archive bytes without overwriting them.
-- Record new reproducible findings here if they are likely to matter in later sessions. Keep temporary logs, screenshots, and machine-specific details in local scratch space.
+- Record new reproducible findings in the [engineering memory](docs/agent-memory.md) if they are likely to matter in later sessions. Keep temporary logs, screenshots, and machine-specific details in local scratch space.
