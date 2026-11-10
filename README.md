@@ -37,8 +37,8 @@ Use `1` for the default scale or `3` for a larger interface. This command uses t
 
 On the tested EA app installation, launching SimCity with `-noUpdates` produced a black screen. Remove that argument from the EA app's advanced launch options if you added it. The startup movie patch works with the normal EA app launch.
 
-## HD interface textures
+## HD textures
 
-The optional IllustrationJaNai builder generates 2× UI textures from your installed game files. Download the builder ZIP from the release and follow the [Windows setup and installation guide](ui-hd/README.md).
+The optional IllustrationJaNai builder generates separate 2× UI and 3D world mods from your installed game files. Download the builder ZIP from the release and follow the [Windows setup and installation guide](ui-hd/README.md).
 
 To build the cleanup executable locally, run `go build .` from the repository root. Pushing a version tag publishes the Windows executable and texture builder source archive in a GitHub Release.

@@ -9,38 +9,46 @@ from tempfile import NamedTemporaryFile
 from zipfile import ZipFile
 
 from PIL import Image, ImageChops
-from safetensors.torch import load
-from spandrel import ModelLoader
-import torch
 
 from refpack import refpack
+from world import SETS
 
 ARCHIVE_SHA256 = "27749962bc934779f867730cdb10617e3d7475313f920a7a966c56b75dbdbeda"
 MODEL_FILE = "4x_IllustrationJaNai_V3detail_HAT_L_28k_bf16.safetensors"
 PACKAGE_NAME = "000_Codex_UI_IllustrationJaNai.package"
 
 
-def extract(package, records):
-    selected = {(r["kind"], r["group"], r["instance"]): r for r in records}
+def package_index(stream, package):
+    header = stream.read(96)
+    if header[:8] != b"DBPF\x03\0\0\0":
+        raise ValueError(f"Unexpected DBPF version: {package}")
+    count, = unpack("<I", header[36:40])
+    offset, = unpack("<I", header[64:68])
+    stream.seek(offset)
+    flags, = unpack("<I", stream.read(4))
+    if not 4 <= flags <= 7:
+        raise ValueError(f"Unexpected index flags: {package}")
+    shared = [unpack("<I", stream.read(4))[0] if flags & (1 << j) else None for j in range(3)]
+    for _ in range(count):
+        kind, group, high = [unpack("<I", stream.read(4))[0] if x is None else x for x in shared]
+        instance, = unpack("<I", stream.read(4))
+        slot = stream.tell()
+        pos, stored, size, compression, _ = unpack("<IIIhH", stream.read(16))
+        yield (kind, group, high, instance), slot, pos, stored & 0x7fffffff, size, compression
+
+
+def extract(package, records=None, kinds=()):
+    selected = None if records is None else {(r["kind"], r["group"], r["instance"]): r for r in records}
     with package.open("rb") as stream:
-        header = stream.read(96)
-        if header[:8] != b"DBPF\x03\0\0\0":
-            raise ValueError(f"Unexpected DBPF version: {package}")
-        count, = unpack("<I", header[36:40])
-        offset, = unpack("<I", header[64:68])
-        stream.seek(offset)
-        flags, = unpack("<I", stream.read(4))
-        if not 4 <= flags <= 7:
-            raise ValueError(f"Unexpected index flags: {package}")
-        shared = [unpack("<I", stream.read(4))[0] if flags & (1 << j) else None for j in range(3)]
         matches = []
-        for _ in range(count):
-            kind, group, _ = [unpack("<I", stream.read(4))[0] if x is None else x for x in shared]
-            instance, pos, stored, size, compression, _ = unpack("<IIIIhH", stream.read(20))
-            row = selected.get((kind, group, instance))
+        for (kind, group, _, instance), _, pos, stored, size, compression in package_index(stream, package):
+            if selected is None:
+                row = dict(kind=kind, group=group, instance=instance) if kind in kinds else None
+            else:
+                row = selected.get((kind, group, instance))
             if row is not None:
-                matches.append((row, pos, stored & 0x7fffffff, size, compression))
-        if len(matches) != len(selected):
+                matches.append((row, pos, stored, size, compression))
+        if selected is not None and len(matches) != len(selected):
             raise ValueError(f"Missing or duplicate resources in {package}")
         for row, pos, stored, size, compression in matches:
             stream.seek(pos)
@@ -55,6 +63,8 @@ def extract(package, records):
 
 
 def model_image(model, tensor, size, *, block=256, pad=32):
+    import torch
+
     _, _, height, width = tensor.shape
     scale = model.scale
     output = torch.empty((3, height * scale, width * scale), dtype=torch.uint8, device="cpu")
@@ -74,6 +84,10 @@ def model_image(model, tensor, size, *, block=256, pad=32):
 
 
 def load_model(archive_path, device):
+    from safetensors.torch import load
+    from spandrel import ModelLoader
+    import torch
+
     with archive_path.open("rb") as archive_file:
         if file_digest(archive_file, "sha256").hexdigest() != ARCHIVE_SHA256:
             raise ValueError(f"Unexpected model archive checksum: {archive_path}")
@@ -84,6 +98,8 @@ def load_model(archive_path, device):
 
 
 def upscale(model, source, size, alpha):
+    import torch
+
     rgb = source.convert("RGB")
     tensor = torch.frombuffer(bytearray(rgb.tobytes()), dtype=torch.uint8)
     tensor = tensor.reshape(source.height, source.width, 3).permute(2, 0, 1).unsqueeze(0).float() / 255
@@ -93,6 +109,8 @@ def upscale(model, source, size, alpha):
 
 
 def build(args):
+    import torch
+
     data_dir = args.game / "SimCityData"
     if not data_dir.is_dir():
         raise ValueError(f"Point --game at the installation folder containing SimCityData: {args.game}")
@@ -190,14 +208,29 @@ def build(args):
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Build the SimCity (2013) IllustrationJaNai UI overlay.")
+    parser = argparse.ArgumentParser(description="Prepare separate SimCity (2013) UI and world texture upgrades.")
+    parser.add_argument("mode", nargs="?", choices=("ui", "world"), default="ui")
     parser.add_argument("--game", type=Path, required=True, help="installation folder containing SimCityData")
     parser.add_argument("--weights", type=Path, default=Path("IllustrationJaNai_V3detail.zip"))
     parser.add_argument("--device", choices=("auto", "cuda", "cpu"), default="auto")
     parser.add_argument("--cache", type=Path, default=Path(".illustration-cache"))
-    parser.add_argument("--output", type=Path, default=Path(PACKAGE_NAME))
+    parser.add_argument("--output", type=Path, help="UI package file or world output directory")
     parser.add_argument("--match", help="build a test package for filenames containing this text")
+    parser.add_argument("--sets", nargs="+", choices=SETS, help="World sets to build (default: all)")
     args = parser.parse_args()
+    if args.mode == "world":
+        if args.match:
+            parser.error("--match is only supported in ui mode")
+        from world import build_world
+
+        try:
+            build_world(args, extract, package_index, load_model, upscale)
+        except (OSError, ValueError, RuntimeError) as error:
+            parser.exit(1, f"World build failed: {error}\n")
+        return
+    if args.sets:
+        parser.error("--sets is only supported in world mode")
+    args.output = args.output or Path(PACKAGE_NAME)
     if args.match and args.output.name == PACKAGE_NAME:
         parser.error("--match requires a separate --output filename")
     try:
