@@ -37,30 +37,45 @@ def update(mode, game, build, sets):
     if not selected or not selected <= available:
         raise ValueError(f"Sets available in this build: {', '.join(sorted(available))}")
     archives = manifest["archives"] if "conflicts" in selected else {}
-    overlays = {OVERLAYS[name]: digest for name, digest in manifest["overlays"].items() if name in selected}
+    overlays = {}
     files = []
+    cleanup_backups = []
     for name, hashes in archives.items():
         if Path(name).name != name or not name.startswith("SimCity") or not name.endswith(".package"):
             raise ValueError(f"Unexpected archive name: {name}")
         installed = data / name
         backup = data / (name + BACKUP_SUFFIX)
-        if mode == "install":
-            if backup.exists():
-                raise ValueError(f"Backup already exists: {backup}")
-            check_hash(installed, hashes["original"])
-            check_hash(build / name, hashes["patched"])
-            files.append((build / name, installed, backup, hashes["patched"], hashes["original"]))
-        else:
-            check_hash(installed, hashes["patched"])
-            check_hash(backup, hashes["original"])
-            files.append((backup, installed, backup, hashes["original"], hashes["patched"]))
-    for name, digest in overlays.items():
-        if mode == "install":
-            if (data / name).exists():
-                raise ValueError(f"Overlay already exists: {name}")
+        original, patched = hashes["original"], hashes["patched"]
+        current = checksum(installed)
+        has_backup = backup.exists()
+        if has_backup:
+            check_hash(backup, original)
+        if current not in (original, patched):
+            raise ValueError(f"Unexpected archive version: {installed}")
+        if current == patched and not has_backup:
+            raise ValueError(f"Missing original backup: {backup}")
+
+        if mode == "install" and current == original:
+            check_hash(build / name, patched)
+            files.append((build / name, installed, None if has_backup else backup, patched, original))
+        elif mode == "uninstall":
+            if current == patched:
+                files.append((backup, installed, None, original, patched))
+            if has_backup:
+                cleanup_backups.append((installed, backup, original))
+
+    for set_name, digest in manifest["overlays"].items():
+        if set_name not in selected:
+            continue
+        name = OVERLAYS[set_name]
+        installed = data / name
+        if installed.exists():
+            check_hash(installed, digest)
+            if mode == "uninstall":
+                overlays[name] = digest
+        elif mode == "install":
             check_hash(build / name, digest)
-        else:
-            check_hash(data / name, digest)
+            overlays[name] = digest
     ensure_closed()
     with TemporaryDirectory(dir=data, prefix=".world-install-") as scratch:
         temporary = Path(scratch)
@@ -83,7 +98,7 @@ def update(mode, game, build, sets):
             for _, target, backup, _, previous_hash in files:
                 check_hash(target, previous_hash)
                 previous = temporary / (target.name + ".previous")
-                if mode == "install":
+                if backup is not None:
                     if backup.exists():
                         raise ValueError(f"Backup already exists: {backup}")
                     previous.rename(backup)
@@ -113,9 +128,10 @@ def update(mode, game, build, sets):
             for backup in new_backups:
                 backup.unlink(missing_ok=True)
             raise
-        if mode == "uninstall":
-            for _, _, backup, _, _ in files:
-                backup.unlink()
+        for installed, backup, original in cleanup_backups:
+            check_hash(installed, original)
+            check_hash(backup, original)
+            backup.unlink()
     action = "Installed" if mode == "install" else "Removed"
     print(f"{action} World sets: {', '.join(sorted(selected))}")
 
